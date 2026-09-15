@@ -2,11 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
-    // `nodenext` resolution + no `"type": "module"` in package.json keeps the
-    // build output as CommonJS, which is the most trouble-free target for
-    // Express + Prisma on Node hosting providers.
+    // Prisma 7 ships as ESM, so the server is ESM too. `nodenext` resolution
+    // means relative imports are written with explicit `.js` extensions.
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "verbatimModuleSyntax": true,
     "outDir": "dist",
     "rootDir": "src",
     "sourceMap": true,
@@ -28,5 +28,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/generated"]
 }

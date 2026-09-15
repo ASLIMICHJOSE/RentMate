@@ -1,0 +1,451 @@
+// RentMate database schema (Milestone 3).
+//
+// Conventions:
+//   * UUIDv7 primary keys - non-sequential and safe to expose in URLs.
+//   * Every mutable model carries createdAt / updatedAt.
+//   * Money is stored as whole rupees (Int) to avoid floating point rounding.
+//   * Indexes are added for the exact filters and sorts used by the API.
+//   * Cascading deletes remove dependent rows, except where history must survive.
+//
+// The database connection is configured in `prisma.config.ts` (Prisma 7 moved
+// `url` / `directUrl` out of the datasource block).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  STUDENT
+  OWNER
+  ADMIN
+}
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  PG
+  HOSTEL
+  STUDIO
+  SHARED_ROOM
+}
+
+enum ListingStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+  RENTED
+  ARCHIVED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum GenderPreference {
+  ANY
+  MALE
+  FEMALE
+}
+
+enum SleepSchedule {
+  EARLY_BIRD
+  FLEXIBLE
+  NIGHT_OWL
+}
+
+enum FoodPreference {
+  VEGETARIAN
+  EGGETARIAN
+  NON_VEGETARIAN
+  VEGAN
+  NO_PREFERENCE
+}
+
+enum SmokingPreference {
+  NEVER
+  SOMETIMES
+  REGULARLY
+}
+
+enum CleanlinessLevel {
+  RELAXED
+  AVERAGE
+  TIDY
+  SPOTLESS
+}
+
+enum RoommateRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum VisitStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum ReportTargetType {
+  PROPERTY
+  USER
+  MESSAGE
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  name         String   @db.VarChar(80)
+  email        String   @unique @db.VarChar(160)
+  /// bcrypt hash - plaintext passwords are never stored or logged.
+  passwordHash String
+  role         Role     @default(STUDENT)
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile                  Profile?
+  properties               Property[]
+  savedProperties          SavedProperty[]
+  roommateProfile          RoommateProfile?
+  sentRoommateRequests     RoommateRequest[]         @relation("RoommateRequestSender")
+  receivedRoommateRequests RoommateRequest[]         @relation("RoommateRequestReceiver")
+  requestedVisits          VisitRequest[]            @relation("VisitStudent")
+  receivedVisits           VisitRequest[]            @relation("VisitOwner")
+  conversations            ConversationParticipant[]
+  messages                 Message[]
+  reviewsWritten           Review[]                  @relation("ReviewAuthor")
+  reviewsReceived          Review[]                  @relation("ReviewSubject")
+  reportsFiled             Report[]                  @relation("ReportReporter")
+  reportsResolved          Report[]                  @relation("ReportResolver")
+
+  @@index([role])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Profile {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  userId     String   @unique @db.Uuid
+  phone      String?  @db.VarChar(20)
+  bio        String?  @db.VarChar(500)
+  city       String?  @db.VarChar(60)
+  occupation String?  @db.VarChar(80)
+  education  String?  @db.VarChar(120)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Listings
+// ---------------------------------------------------------------------------
+
+model Property {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  ownerId       String        @db.Uuid
+  title         String        @db.VarChar(140)
+  description   String        @db.Text
+  /// Monthly rent in whole rupees.
+  rent          Int
+  deposit       Int
+  city          String        @db.VarChar(60)
+  locality      String        @db.VarChar(80)
+  address       String        @db.VarChar(240)
+  latitude      Float?
+  longitude     Float?
+  propertyType  PropertyType
+  bedrooms      Int
+  bathrooms     Int
+  furnished     Boolean       @default(false)
+  areaSqft      Int?
+  availableFrom DateTime      @db.Date
+  status        ListingStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  owner         User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  images        PropertyImage[]
+  amenities     PropertyAmenity[]
+  savedBy       SavedProperty[]
+  visits        VisitRequest[]
+  reviews       Review[]
+  conversations Conversation[]
+
+  // Supports the discovery query: published listings filtered by city and rent.
+  @@index([status, city, rent])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([ownerId, status])
+  @@index([propertyType, bedrooms])
+  @@map("properties")
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  propertyId String   @db.Uuid
+  /// Cloudinary delivery URL. Image bytes never live in PostgreSQL.
+  imageUrl   String
+  /// Cloudinary public id, kept so the asset can be deleted later.
+  publicId   String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, sortOrder])
+  @@map("property_images")
+}
+
+model Amenity {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  code      String   @unique @db.VarChar(40)
+  label     String   @db.VarChar(60)
+  createdAt DateTime @default(now())
+
+  properties PropertyAmenity[]
+
+  @@map("amenities")
+}
+
+/// Join table for the Property <-> Amenity many-to-many relation.
+model PropertyAmenity {
+  propertyId String @db.Uuid
+  amenityId  String @db.Uuid
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenity  Amenity  @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, amenityId])
+  @@index([amenityId])
+  @@map("property_amenities")
+}
+
+// ---------------------------------------------------------------------------
+// Roommates
+// ---------------------------------------------------------------------------
+
+model RoommateProfile {
+  id                  String            @id @default(uuid(7)) @db.Uuid
+  userId              String            @unique @db.Uuid
+  city                String            @db.VarChar(60)
+  budgetMin           Int
+  budgetMax           Int
+  preferredLocalities String[]
+  occupation          String            @db.VarChar(80)
+  institute           String?           @db.VarChar(120)
+  moveInFrom          DateTime          @db.Date
+  foodPreference      FoodPreference
+  smoking             SmokingPreference
+  petsFriendly        Boolean           @default(false)
+  sleepSchedule       SleepSchedule
+  cleanliness         CleanlinessLevel
+  studyHabits         String?           @db.VarChar(300)
+  gender              Gender?
+  genderPreference    GenderPreference  @default(ANY)
+  bio                 String?           @db.VarChar(500)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Candidate search: active profiles in a city whose budget range overlaps.
+  @@index([isActive, city, budgetMin])
+  @@map("roommate_profiles")
+}
+
+model RoommateRequest {
+  id          String                @id @default(uuid(7)) @db.Uuid
+  senderId    String                @db.Uuid
+  receiverId  String                @db.Uuid
+  message     String?               @db.VarChar(500)
+  status      RoommateRequestStatus @default(PENDING)
+  respondedAt DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  sender   User @relation("RoommateRequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("RoommateRequestReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  // Duplicate *active* requests are additionally blocked by a partial unique
+  // index created in the migration SQL (see prisma/migrations).
+  @@index([receiverId, status])
+  @@index([senderId, status])
+  @@map("roommate_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Saves and visits
+// ---------------------------------------------------------------------------
+
+model SavedProperty {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  userId     String   @db.Uuid
+  propertyId String   @db.Uuid
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // Database-level guard against duplicate saves.
+  @@unique([userId, propertyId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("saved_properties")
+}
+
+model VisitRequest {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  propertyId    String      @db.Uuid
+  studentId     String      @db.Uuid
+  ownerId       String      @db.Uuid
+  requestedDate DateTime
+  message       String?     @db.VarChar(500)
+  status        VisitStatus @default(PENDING)
+  respondedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  student  User     @relation("VisitStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  owner    User     @relation("VisitOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, status])
+  @@index([studentId, status])
+  @@index([propertyId, requestedDate])
+  @@map("visit_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Messaging
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  /// Set when the conversation started from a specific listing.
+  propertyId    String?  @db.Uuid
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property     Property?                 @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId String    @db.Uuid
+  userId         String    @db.Uuid
+  /// Used to compute unread counts without touching every message row.
+  lastReadAt     DateTime?
+  joinedAt       DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  conversationId String    @db.Uuid
+  senderId       String    @db.Uuid
+  body           String    @db.VarChar(2000)
+  createdAt      DateTime  @default(now())
+  editedAt       DateTime?
+  /// Soft delete so moderation can still review removed content.
+  deletedAt      DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@map("messages")
+}
+
+// ---------------------------------------------------------------------------
+// Reviews and moderation
+// ---------------------------------------------------------------------------
+
+model Review {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  authorId   String   @db.Uuid
+  /// The user being reviewed (owner or student).
+  subjectId  String   @db.Uuid
+  /// Null for reviews about a person rather than a specific listing.
+  propertyId String?  @db.Uuid
+  /// 1-5, enforced by a CHECK constraint in the migration SQL as well.
+  rating     Int
+  comment    String?  @db.VarChar(1000)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  author   User      @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  subject  User      @relation("ReviewSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  // One review per author per listing ("authorId, subjectId" for NULL listings
+  // is enforced by a partial unique index in the migration SQL).
+  @@unique([authorId, propertyId])
+  @@index([subjectId, createdAt(sort: Desc)])
+  @@index([propertyId])
+  @@map("reviews")
+}
+
+model Report {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  reporterId     String           @db.Uuid
+  targetType     ReportTargetType
+  /// Id of the reported property, user or message.
+  targetId       String           @db.Uuid
+  reason         String           @db.VarChar(120)
+  details        String?          @db.VarChar(1000)
+  status         ReportStatus     @default(PENDING)
+  resolvedById   String?          @db.Uuid
+  resolutionNote String?          @db.VarChar(500)
+  resolvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  reporter   User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId])
+  @@map("reports")
+}

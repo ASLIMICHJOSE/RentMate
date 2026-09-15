@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { ApiError } from '../utils/ApiError';
-import { failure, type ApiErrorBody } from '../utils/apiResponse';
-import { isProduction } from '../config/env';
+import { ApiError } from '../utils/ApiError.js';
+import { failure, type ApiErrorBody } from '../utils/apiResponse.js';
+import { isProduction } from '../config/env.js';
 
 /** Body-parser throws this when the request body is not valid JSON. */
 interface BodyParserError extends SyntaxError {

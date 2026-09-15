@@ -1,14 +1,14 @@
-import { env, isDevelopment, isProduction } from './config/env';
+import { env, isDevelopment, isProduction } from './config/env.js';
 import express, { type Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import { apiRouter } from './routes';
-import { errorHandler } from './middleware/errorHandler';
-import { notFoundHandler } from './middleware/notFound';
-import { ApiError } from './utils/ApiError';
-import { failure } from './utils/apiResponse';
+import { apiRouter } from './routes/index.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import { notFoundHandler } from './middleware/notFound.js';
+import { ApiError } from './utils/ApiError.js';
+import { failure } from './utils/apiResponse.js';
 
 /**
  * Builds the Express application.

@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
-import { env } from './config/env';
-import { app } from './app';
+import { env } from './config/env.js';
+import { disconnectPrisma } from './config/prisma.js';
+import { app } from './app.js';
 
 const server = createServer(app);
 
@@ -19,9 +20,11 @@ function shutdown(signal: string): void {
       process.exit(1);
     }
 
-    // Milestone 14 will also close the Socket.IO server and disconnect Prisma here.
-    console.log('Shutdown complete.');
-    process.exit(0);
+    // Release database connections; Milestone 14 also closes Socket.IO here.
+    void disconnectPrisma().finally(() => {
+      console.log('Shutdown complete.');
+      process.exit(0);
+    });
   });
 
   // Don't hang forever on stuck connections.

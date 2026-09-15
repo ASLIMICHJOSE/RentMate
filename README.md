@@ -4,11 +4,11 @@ A full-stack rental and roommate platform for students and young professionals: 
 rentals, find compatible roommates, manage listings, request visits, chat in real time and
 moderate everything from an admin dashboard.
 
-> **Status: Milestone 2 of 18 complete — frontend foundation.**
-> The API runs with a health endpoint, and the client ships a full UI foundation: routed pages,
-> a reusable component library, forms with Zod validation, toast notifications and
-> loading/empty/error states. Listing and roommate data is still mock data — the database lands
-> in Milestone 3. See [Roadmap](#roadmap) for what comes next.
+> **Status: Milestone 3 of 18 in progress — database.**
+> The full domain schema, Prisma 7 client, seed script and database health check are in place.
+> The initial migration is applied as soon as a Supabase connection string is configured
+> (see [Database](#database)). Listing and roommate data still comes from the mock layer in
+> `client/src/data/` until the API endpoints exist. See [Roadmap](#roadmap) for what comes next.
 
 ---
 
@@ -17,8 +17,8 @@ moderate everything from an admin dashboard.
 | Layer     | Technology                                                                   |
 | --------- | ---------------------------------------------------------------------------- |
 | Frontend  | React 19, Vite, TypeScript, Tailwind CSS v4, React Router, Axios, Zod        |
-| Backend   | Node.js, Express 5, TypeScript, JWT auth, bcrypt, Zod, Socket.IO, Cloudinary |
-| Database  | PostgreSQL + Prisma ORM                                                      |
+| Backend   | Node.js (ESM), Express 5, TypeScript, JWT auth, bcrypt, Zod, Socket.IO, Cloudinary |
+| Database  | PostgreSQL (Supabase) + Prisma 7 with the `pg` driver adapter                |
 | Tooling   | ESLint (flat config), Prettier, Git, npm workspaces                          |
 | Deployment| Client → Vercel, Server → Render/Railway, DB → hosted PostgreSQL, Images → Cloudinary |
 
@@ -39,6 +39,14 @@ moderate everything from an admin dashboard.
 Requests flow one way only: **route → middleware → controller → service → Prisma → PostgreSQL**.
 The frontend never touches the database directly, and every sensitive operation is authorized
 on the server (the client is never trusted).
+
+**Why the server is ESM:** Prisma 7 ships as an ES module and its client is generated as
+TypeScript source into `server/src/generated/`, so the API moved from CommonJS to ESM
+(`"type": "module"`, `module`/`moduleResolution: nodenext`). Relative imports therefore carry
+explicit `.js` extensions. This is a required consequence of the Prisma 7 upgrade, not a
+stylistic preference — Prisma 7 also drops the Rust query engine, which is why the client is
+constructed with a `@prisma/adapter-pg` driver adapter and the CLI is configured through
+`prisma.config.ts` instead of flags in `package.json`.
 
 ## Repository layout
 
@@ -69,16 +77,22 @@ rentmate/
 ├── server/                  # Express + TypeScript REST API
 │   ├── src/
 │   │   ├── config/env.ts    # validated, typed environment config
+│   │   ├── config/prisma.ts # shared PrismaClient (pg driver adapter)
 │   │   ├── controllers/     # thin HTTP layer
 │   │   ├── middleware/      # error handling, auth (M4), notFound
 │   │   ├── routes/          # `/api` route registration
-│   │   ├── services/        # (M3+) business logic
-│   │   ├── validators/      # (M3+) Zod schemas
-│   │   ├── types/           # (M3+) shared server types
+│   │   ├── services/        # (M6+) business logic
+│   │   ├── validators/      # (M4+) Zod schemas
+│   │   ├── types/           # (M4+) shared server types
 │   │   ├── utils/           # ApiError, response envelope
+│   │   ├── generated/       # Prisma client output (gitignored)
 │   │   ├── app.ts           # Express app factory
 │   │   └── server.ts        # HTTP bootstrap + graceful shutdown
-│   ├── prisma/              # (Milestone 3) schema + migrations
+│   ├── prisma/
+│   │   ├── schema.prisma    # domain schema
+│   │   ├── migrations/      # SQL migrations
+│   │   └── seed.ts          # development seed
+│   ├── prisma.config.ts     # Prisma 7 CLI config
 │   └── .env.example
 ├── .editorconfig
 ├── .prettierrc.json
@@ -145,6 +159,57 @@ delivers them rather than linking to a dead route. All mock data lives in `src/d
 either call the async mock API layer (`data/mockApi.ts`, replaced by `services/` in Milestone 7)
 or read a documented fixture for a dashboard table. Nothing else in the app imports fixtures.
 
+## Database
+
+PostgreSQL is hosted on Supabase. Prisma 7 talks to it through the `node-postgres` driver
+adapter and needs **two** connection strings:
+
+| Variable       | Used by      | Supabase connection string                  |
+| -------------- | ------------ | ------------------------------------------- |
+| `DATABASE_URL` | the running API | **Transaction pooler** (port `6543`, `?pgbouncer=true`) |
+| `DIRECT_URL`   | Prisma CLI (migrations, seed) | **Direct connection** (port `5432`) |
+
+Migrations cannot run through a transaction pooler, which is why the API and the CLI use
+different URLs; `prisma.config.ts` points the CLI at `DIRECT_URL`.
+
+```bash
+# 1. Create a project at supabase.com, then copy both strings from
+#    Project settings -> Database -> Connection string into server/.env
+
+# 2. Apply the schema and seed demo data
+npm run prisma:migrate --workspace server   # prisma migrate dev
+npm run db:seed --workspace server          # prisma db seed
+
+# 3. Inspect data in the browser
+npm run prisma:studio --workspace server
+```
+
+Seeded accounts all use the password `Password123!` (hashed with bcrypt before insertion),
+for example `admin@rentmate.dev`, `priya.owner@rentmate.dev`, `aditya.student@rentmate.dev`.
+
+### Schema overview
+
+| Model                    | Purpose                                                        |
+| ------------------------ | -------------------------------------------------------------- |
+| `User`                   | Accounts with a `STUDENT` / `OWNER` / `ADMIN` role, bcrypt hash |
+| `Profile`                | Optional profile details, one row per user                      |
+| `Property`               | Listings with rent, deposit, location and moderation status     |
+| `PropertyImage`          | Cloudinary URLs + public ids (no image bytes in Postgres)       |
+| `Amenity` / `PropertyAmenity` | Normalised amenity catalogue and its join table            |
+| `RoommateProfile`        | Budget, locality, lifestyle preferences for matching            |
+| `SavedProperty`          | Shortlists, unique per `(user, property)`                       |
+| `RoommateRequest`        | Requests between students with a validated status flow          |
+| `VisitRequest`           | Visit scheduling between students and owners                    |
+| `Conversation` / `ConversationParticipant` / `Message` | Chat threads and history     |
+| `Review`                 | Ratings and comments about a listing or a user                  |
+| `Report`                 | Moderation reports for properties, users and messages           |
+
+Design notes: UUIDv7 keys (safe to expose, still time-sortable), `Int` rupees instead of floats,
+indexes matching the discovery query (`status, city, rent`), cascade deletes for dependent rows,
+and `updatedAt` maintenance on every mutable model. Extra integrity that Prisma cannot express
+(partial unique indexes for "one active roommate request", a `CHECK` on review ratings) is added
+in the migration SQL.
+
 ## Environment variables
 
 All configuration is validated at boot by Zod (`server/src/config/env.ts`): the API refuses to
@@ -156,7 +221,8 @@ start with an invalid `.env` instead of failing later at runtime.
 | `PORT`                                                | server  | API port (default `5000`)                       |
 | `CLIENT_URL`                                          | server  | Allowed CORS origin                              |
 | `SERVER_URL`                                          | server  | Public API URL                                   |
-| `DATABASE_URL`                                        | server  | *Milestone 3* — PostgreSQL connection string     |
+| `DATABASE_URL`                                        | server  | Pooled PostgreSQL connection (required)          |
+| `DIRECT_URL`                                          | server  | Direct connection for Prisma migrations          |
 | `JWT_SECRET` (≥32 chars), `JWT_EXPIRES_IN`            | server  | *Milestone 4* — auth tokens                      |
 | `COOKIE_SECURE`                                       | server  | `true` in production (HTTPS-only cookie)          |
 | `CLOUDINARY_CLOUD_NAME`, `_API_KEY`, `_API_SECRET`     | server  | *Milestone 15* — image uploads                   |
@@ -221,7 +287,7 @@ endpoints land.
 | --- | -------------------------------- | ------ |
 | 1   | Project foundation               | ✅ done |
 | 2   | Frontend foundation (UI + routes)| ✅ done |
-| 3   | Database setup (Prisma)          | ⏳ next |
+| 3   | Database setup (Prisma)          | 🚧 schema, seed and client done; migration pending credentials |
 | 4   | Authentication                   | ☐      |
 | 5   | Profile management               | ☐      |
 | 6   | Property CRUD                    | ☐      |

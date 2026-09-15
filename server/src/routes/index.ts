@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { healthRouter } from './health.routes';
+import { healthRouter } from './health.routes.js';
 
 /**
  * Root API router mounted at `/api`.

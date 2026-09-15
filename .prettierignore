@@ -5,4 +5,7 @@ coverage/
 package-lock.json
 *.md
 client/public/
+
+# Prisma-generated client + migration SQL
+server/src/generated/
 server/prisma/migrations/

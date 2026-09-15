@@ -24,8 +24,11 @@ const envSchema = z.object({
   SERVER_URL: z.string().min(1).default('http://localhost:5000'),
   LOG_LEVEL: z.enum(['tiny', 'dev', 'combined']).default('dev'),
 
-  // Introduced in Milestone 3 (database) - optional until then.
-  DATABASE_URL: optionalString(),
+  // Pooled connection used by the API at runtime.
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (see server/.env.example)'),
+  // Non-pooled connection used by the Prisma CLI for migrations. Only the CLI
+  // needs it, so the API can run without it (defaults to DATABASE_URL).
+  DIRECT_URL: optionalString(),
 
   // Introduced in Milestone 4 (authentication) - optional until then.
   JWT_SECRET: optionalString(),
@@ -59,6 +62,9 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+/** Connection string the Prisma CLI should use for migrations. */
+export const migrationDatabaseUrl = env.DIRECT_URL ?? env.DATABASE_URL;
 
 export const isProduction = env.NODE_ENV === 'production';
 export const isDevelopment = env.NODE_ENV === 'development';

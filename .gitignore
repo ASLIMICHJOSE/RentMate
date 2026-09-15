@@ -6,6 +6,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Generated code
+server/src/generated/
+
 # Environment variables (never commit secrets)
 .env
 .env.*
