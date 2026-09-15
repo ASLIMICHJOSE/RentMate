@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Route, Routes } from 'react-router-dom';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoadingState } from './components/ui/LoadingState';
 import { RootLayout } from './layouts/RootLayout';
 
@@ -32,19 +33,76 @@ export default function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route element={<RootLayout />}>
+          {/* Public */}
           <Route index element={<HomePage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
           <Route path="properties" element={<PropertiesPage />} />
           <Route path="properties/:id" element={<PropertyDetailsPage />} />
           <Route path="roommates" element={<RoommatesPage />} />
-          <Route path="dashboard" element={<StudentDashboardPage />} />
-          <Route path="saved" element={<SavedPropertiesPage />} />
-          <Route path="requests" element={<RequestsPage />} />
-          <Route path="messages" element={<MessagesPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-          <Route path="owner" element={<OwnerDashboardPage />} />
-          <Route path="admin" element={<AdminDashboardPage />} />
+
+          {/* Signed in */}
+          <Route
+            path="messages"
+            element={
+              <ProtectedRoute>
+                <MessagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Student */}
+          <Route
+            path="dashboard"
+            element={
+              <ProtectedRoute roles={['STUDENT']}>
+                <StudentDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="saved"
+            element={
+              <ProtectedRoute roles={['STUDENT']}>
+                <SavedPropertiesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="requests"
+            element={
+              <ProtectedRoute roles={['STUDENT']}>
+                <RequestsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Owner / admin */}
+          <Route
+            path="owner"
+            element={
+              <ProtectedRoute roles={['OWNER']}>
+                <OwnerDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="admin"
+            element={
+              <ProtectedRoute roles={['ADMIN']}>
+                <AdminDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -8,7 +9,10 @@ import { Checkbox } from '../../components/ui/Checkbox';
 import { FormField } from '../../components/ui/FormField';
 import { Select } from '../../components/ui/Select';
 import { TextInput } from '../../components/ui/TextInput';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { getErrorMessage, getFieldErrors } from '../../utils/apiErrors';
+import { defaultRouteForRole } from '../../utils/roles';
 
 const ROLE_OPTIONS = [
   { value: 'STUDENT', label: 'Student - looking for a place' },
@@ -40,17 +44,16 @@ const registerSchema = z
 
 type RegisterValues = z.infer<typeof registerSchema>;
 
-/**
- * Registration screen.
- *
- * Validation mirrors the server-side rules that arrive in Milestone 4; the
- * request itself is not wired up yet.
- */
 export default function RegisterPage() {
+  const { register: registerAccount } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -64,12 +67,41 @@ export default function RegisterPage() {
     },
   });
 
-  function onSubmit(values: RegisterValues): void {
-    showToast({
-      variant: 'info',
-      title: 'Account creation is not connected yet',
-      description: `Registration for ${values.email} is wired up in Milestone 4, together with password hashing.`,
-    });
+  async function onSubmit(values: RegisterValues): Promise<void> {
+    setIsSubmitting(true);
+
+    try {
+      const user = await registerAccount({
+        name: values.name,
+        email: values.email,
+        password: values.password,
+        role: values.role,
+      });
+
+      showToast({
+        variant: 'success',
+        title: 'Account created',
+        description: `Welcome to RentMate, ${user.name.split(' ')[0]}.`,
+      });
+
+      navigate(defaultRouteForRole(user.role), { replace: true });
+    } catch (caught) {
+      const fieldErrors = getFieldErrors(caught);
+
+      for (const [field, message] of Object.entries(fieldErrors)) {
+        if (field === 'name' || field === 'email' || field === 'password' || field === 'role') {
+          setError(field, { message });
+        }
+      }
+
+      showToast({
+        variant: 'error',
+        title: 'Could not create your account',
+        description: getErrorMessage(caught),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -174,13 +206,14 @@ export default function RegisterPage() {
             )}
           </div>
 
-          <Button type="submit" fullWidth className="mt-1">
+          <Button type="submit" fullWidth className="mt-1" isLoading={isSubmitting}>
             Create account
           </Button>
         </form>
 
         <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-          Passwords are hashed with bcrypt on the server in Milestone 4; nothing is stored yet.
+          Passwords are hashed with bcrypt on the server (12 rounds) and are never stored or logged
+          in plaintext. Admin accounts are created by other admins, not from this form.
         </p>
       </Card>
 

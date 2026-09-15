@@ -14,11 +14,16 @@ export interface PublicUser {
 }
 
 /** Profile fields a student/owner can edit (Milestone 5). */
-export interface UserProfile {
-  userId: string;
+export interface UserProfileSummary {
   phone: string | null;
   bio: string | null;
   city: string | null;
   occupation: string | null;
   education: string | null;
+}
+
+/** The signed-in user as returned by `/api/auth/me`. */
+export interface CurrentUser extends PublicUser {
+  createdAt: string;
+  profile: UserProfileSummary | null;
 }

@@ -30,10 +30,19 @@ const envSchema = z.object({
   // needs it, so the API can run without it (defaults to DATABASE_URL).
   DIRECT_URL: optionalString(),
 
-  // Introduced in Milestone 4 (authentication) - optional until then.
-  JWT_SECRET: optionalString(),
+  // --- Authentication ------------------------------------------------------
+  JWT_SECRET: z
+    .string()
+    .min(32, 'JWT_SECRET must be at least 32 characters (try: openssl rand -base64 48)'),
   JWT_EXPIRES_IN: z.string().min(1).default('7d'),
   COOKIE_SECURE: booleanFromString(false),
+  COOKIE_SAME_SITE: z.enum(['lax', 'strict', 'none']).default('lax'),
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 60 * 1000),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
 
   // Introduced in Milestone 15 (image uploads) - optional until then.
   CLOUDINARY_CLOUD_NAME: optionalString(),

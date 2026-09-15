@@ -1,12 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { FormField } from '../../components/ui/FormField';
 import { TextInput } from '../../components/ui/TextInput';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { getErrorMessage, getFieldErrors } from '../../utils/apiErrors';
+import { defaultRouteForRole } from '../../utils/roles';
 
 const loginSchema = z.object({
   email: z.email('Enter a valid email address'),
@@ -15,30 +19,53 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-/**
- * Login screen.
- *
- * The form and its validation are final; the credentials are not sent anywhere
- * yet because `POST /api/auth/login` is implemented in Milestone 4. Submitting
- * tells the user exactly that instead of pretending to sign them in.
- */
 export default function LoginPage() {
+  const { login } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
 
-  function onSubmit(values: LoginValues): void {
-    showToast({
-      variant: 'info',
-      title: 'Authentication is not connected yet',
-      description: `Signing in as ${values.email} works once the auth API lands in Milestone 4.`,
-    });
+  async function onSubmit(values: LoginValues): Promise<void> {
+    setIsSubmitting(true);
+
+    try {
+      const user = await login(values);
+      showToast({
+        variant: 'success',
+        title: `Welcome back, ${user.name.split(' ')[0]}`,
+      });
+
+      // Return the user to the page that redirected them here, if any.
+      const requestedPath = (location.state as { from?: string } | null)?.from;
+      navigate(requestedPath ?? defaultRouteForRole(user.role), { replace: true });
+    } catch (caught) {
+      const fieldErrors = getFieldErrors(caught);
+
+      for (const [field, message] of Object.entries(fieldErrors)) {
+        if (field === 'email' || field === 'password') {
+          setError(field, { message });
+        }
+      }
+
+      showToast({
+        variant: 'error',
+        title: 'Could not sign in',
+        description: getErrorMessage(caught),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -80,14 +107,15 @@ export default function LoginPage() {
             )}
           </FormField>
 
-          <Button type="submit" fullWidth className="mt-1">
+          <Button type="submit" fullWidth className="mt-1" isLoading={isSubmitting}>
             Log in
           </Button>
         </form>
 
         <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-          Validation runs locally. Session handling, secure cookies and role-based access are
-          implemented in Milestone 4.
+          Sessions use an httpOnly cookie with a signed JWT. After seeding, a demo student account
+          is <span className="font-mono">aditya.student@rentmate.dev</span> with password{' '}
+          <span className="font-mono">Password123!</span>.
         </p>
       </Card>
 

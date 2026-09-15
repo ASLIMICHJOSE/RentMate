@@ -4,11 +4,12 @@ A full-stack rental and roommate platform for students and young professionals: 
 rentals, find compatible roommates, manage listings, request visits, chat in real time and
 moderate everything from an admin dashboard.
 
-> **Status: Milestone 3 of 18 in progress — database.**
-> The full domain schema, Prisma 7 client, seed script and database health check are in place.
-> The initial migration is applied as soon as a Supabase connection string is configured
-> (see [Database](#database)). Listing and roommate data still comes from the mock layer in
-> `client/src/data/` until the API endpoints exist. See [Roadmap](#roadmap) for what comes next.
+> **Status: Milestones 1-4 built; Milestone 3/4 runtime verification pending a database URL.**
+> Foundation, frontend, database schema (with migrations and seed) and authentication are all
+> written and statically verified. Applying migrations, seeding and exercising login end to end
+> needs the Supabase connection strings in `server/.env` (see [Database](#database)). Listings and
+> roommates still render from the mock layer in `client/src/data/` until the property API lands.
+> See [Roadmap](#roadmap) for what comes next.
 
 ---
 
@@ -58,14 +59,15 @@ rentmate/
 │   │   ├── pages/           # route-level screens (auth/, properties/, dashboard/, owner/, admin/)
 │   │   ├── components/
 │   │   │   ├── ui/          # Button, Card, Modal, form controls, states, Badge, Skeleton
+│   │   │   ├── auth/        # ProtectedRoute (role-aware guard)
 │   │   │   ├── layout/      # Navbar, Footer
 │   │   │   ├── property/    # PropertyCard, SearchBar, FilterPanel, PropertyGallery
 │   │   │   ├── roommate/    # RoommateCard with compatibility breakdown
 │   │   │   ├── dashboard/   # ActivityList
 │   │   │   └── feedback/    # Toaster
 │   │   ├── layouts/         # RootLayout, DashboardLayout, per-role nav config
-│   │   ├── hooks/           # useToast, useDebouncedValue
-│   │   ├── context/         # ToastProvider + context
+│   │   ├── hooks/           # useToast, useAuth, useDebouncedValue
+│   │   ├── context/         # Toast + Auth providers and their contexts
 │   │   ├── data/            # MOCK data + mock API layer (replaced in Milestones 3-7)
 │   │   ├── services/        # API layer (single Axios instance)
 │   │   ├── types/           # shared client types
@@ -81,9 +83,9 @@ rentmate/
 │   │   ├── controllers/     # thin HTTP layer
 │   │   ├── middleware/      # error handling, auth (M4), notFound
 │   │   ├── routes/          # `/api` route registration
-│   │   ├── services/        # (M6+) business logic
-│   │   ├── validators/      # (M4+) Zod schemas
-│   │   ├── types/           # (M4+) shared server types
+│   │   ├── services/        # business logic (auth; properties from M6)
+│   │   ├── validators/      # Zod request schemas
+│   │   ├── types/           # session types + Express request augmentation
 │   │   ├── utils/           # ApiError, response envelope
 │   │   ├── generated/       # Prisma client output (gitignored)
 │   │   ├── app.ts           # Express app factory
@@ -223,8 +225,9 @@ start with an invalid `.env` instead of failing later at runtime.
 | `SERVER_URL`                                          | server  | Public API URL                                   |
 | `DATABASE_URL`                                        | server  | Pooled PostgreSQL connection (required)          |
 | `DIRECT_URL`                                          | server  | Direct connection for Prisma migrations          |
-| `JWT_SECRET` (≥32 chars), `JWT_EXPIRES_IN`            | server  | *Milestone 4* — auth tokens                      |
-| `COOKIE_SECURE`                                       | server  | `true` in production (HTTPS-only cookie)          |
+| `JWT_SECRET` (≥32 chars), `JWT_EXPIRES_IN`            | server  | Signed session tokens (required)                 |
+| `COOKIE_SECURE`, `COOKIE_SAME_SITE`                   | server  | Cookie hardening; use `true`/`none` cross-site    |
+| `AUTH_RATE_LIMIT_WINDOW_MS`, `AUTH_RATE_LIMIT_MAX`    | server  | Brute-force limiter for register/login            |
 | `CLOUDINARY_CLOUD_NAME`, `_API_KEY`, `_API_SECRET`     | server  | *Milestone 15* — image uploads                   |
 | `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX`               | server  | API rate limiting                                 |
 | `VITE_API_URL`                                        | client  | API base URL (`/api` uses the proxy)              |
@@ -235,9 +238,25 @@ start with an invalid `.env` instead of failing later at runtime.
 
 ## API overview
 
-| Method | Endpoint      | Auth | Description                                    |
-| ------ | ------------- | ---- | ---------------------------------------------- |
-| `GET`  | `/api/health` | —    | Liveness probe: status, env, uptime, timestamp |
+| Method | Endpoint               | Auth        | Description                                        |
+| ------ | ---------------------- | ----------- | -------------------------------------------------- |
+| `GET`  | `/api/health`          | —           | Liveness probe: status, env, uptime, database check |
+| `POST` | `/api/auth/register`   | —           | Create a student/owner account and start a session  |
+| `POST` | `/api/auth/login`      | —           | Sign in with email + password                       |
+| `POST` | `/api/auth/logout`     | —           | Clear the session cookie                            |
+| `GET`  | `/api/auth/me`         | session     | The signed-in user with their profile summary       |
+
+Authentication details:
+
+- Passwords are hashed with bcrypt (cost 12) and the hash is never selected by any read path.
+- The session is a signed JWT (7 days) delivered in an **httpOnly** cookie, so an XSS bug cannot
+  read it. `Authorization: Bearer <token>` also works for Postman/Thunder Client.
+- `/register` accepts only `STUDENT` or `OWNER`; admin accounts are never self-service.
+- Every request re-reads the user from the database, so role changes and suspensions take effect
+  immediately instead of waiting for the token to expire.
+- Unknown emails and wrong passwords return the same `401 INVALID_CREDENTIALS` response, with a
+  dummy bcrypt comparison so response times do not reveal which emails exist.
+- Register/login are rate limited separately from the rest of the API.
 
 Responses use one envelope everywhere:
 
@@ -256,8 +275,9 @@ unexpected error returns `500 INTERNAL_ERROR` without leaking stack traces in pr
 
 Implemented in Milestone 1 and kept active throughout development:
 
-- Passwords will be hashed with bcrypt and stored as hashes only (Milestone 4).
-- Auth via httpOnly cookies; `COOKIE_SECURE=true` in production.
+- Passwords are hashed with bcrypt (cost 12) and stored as hashes only.
+- Auth via httpOnly cookies with a signed JWT; `COOKIE_SECURE=true` in production.
+- Brute-force protection: dedicated rate limits on register/login, plus a generic API limiter.
 - Role-based authorization (`STUDENT` / `OWNER` / `ADMIN`) enforced server-side, plus ownership
   checks so users can only mutate their own resources.
 - Every external input is validated with Zod at the edge.
@@ -267,19 +287,31 @@ Implemented in Milestone 1 and kept active throughout development:
 
 ## Testing
 
-Automated tests arrive with the features they cover (Milestone 4 onward) so each milestone is
-verified before the next one starts. Until then each milestone is checked with:
-
 ```bash
-npm run verify                       # typecheck + ESLint + Prettier
+npm run verify                       # typecheck + ESLint + Vitest + Prettier
+npm run test                         # unit tests only (Vitest, no database required)
 npm run build                        # production build of both workspaces
 npm run dev                          # then walk the routes in a browser
 ```
 
-For Milestone 1/2 the API was probed directly (`GET /api/health`, a 404 route and malformed
-JSON) and every client page module was requested through the Vite dev server to confirm it
-transforms without errors. Postman/Thunder Client collections will be documented here as
-endpoints land.
+Vitest unit tests live next to the code they cover (`server/src/**/*.test.ts`) and deliberately
+avoid the database so they run anywhere:
+
+| File                                | Covers                                                        |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `utils/password.test.ts`            | bcrypt hashing, salting, verification                          |
+| `utils/token.test.ts`               | JWT round-trip, forged/expired tokens, duration parsing        |
+| `utils/cookies.test.ts`             | httpOnly/secure/SameSite flags and cookie lifetime             |
+| `validators/auth.validator.test.ts` | input normalisation, password rules, admin self-signup blocked  |
+| `middleware/auth.middleware.test.ts`| validation, role authorization, error envelope mapping         |
+| `middleware/errorHandler.production.test.ts` | no internals leaked in production responses           |
+
+HTTP-level integration tests (register → login → protected route, ownership checks) are added
+alongside the milestone that first needs a seeded database. Endpoint behaviour has so far been
+probed with `curl`: health and 404/400 envelopes, anonymous and forged-token `401`s, rejected
+admin self-signup, per-field validation details, cookie clearing on logout and the 429
+brute-force limiter. Postman/Thunder Client collections will be documented here as endpoints
+land.
 
 ## Roadmap
 
@@ -287,8 +319,8 @@ endpoints land.
 | --- | -------------------------------- | ------ |
 | 1   | Project foundation               | ✅ done |
 | 2   | Frontend foundation (UI + routes)| ✅ done |
-| 3   | Database setup (Prisma)          | 🚧 schema, seed and client done; migration pending credentials |
-| 4   | Authentication                   | ☐      |
+| 3   | Database setup (Prisma)          | 🚧 schema, migrations and seed written; applying them needs credentials |
+| 4   | Authentication                   | 🚧 code + unit tests done; end-to-end login needs the database |
 | 5   | Profile management               | ☐      |
 | 6   | Property CRUD                    | ☐      |
 | 7   | Search & filtering               | ☐      |

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PropertyCard } from '../components/property/PropertyCard';
 import { SearchBar } from '../components/property/SearchBar';
@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/Badge';
 import { buttonStyles } from '../components/ui/buttonStyles';
 import { Card } from '../components/ui/Card';
 import { MOCK_PROPERTIES } from '../data/mockProperties';
+import { fetchHealth, type HealthPayload } from '../services/health.service';
 
 const steps = [
   {
@@ -85,8 +86,8 @@ export default function HomePage() {
               ))}
             </ul>
             <p className="mt-6 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
-              Listings shown here are sample data used while the platform is built out. Real
-              listings arrive with the database milestone.
+              Listings shown here are sample data used while the platform is built out. They are
+              served from the database once the property API lands in Milestone 7.
             </p>
           </Card>
         </div>
@@ -142,6 +143,68 @@ export default function HomePage() {
           </Card>
         </div>
       </section>
+
+      <PlatformStatus />
     </>
+  );
+}
+
+/**
+ * Small development aid: shows whether the API and database are reachable so a
+ * misconfigured `.env` is obvious without opening dev tools.
+ */
+function PlatformStatus() {
+  const [health, setHealth] = useState<HealthPayload | null>(null);
+  const [isUnreachable, setIsUnreachable] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+
+    fetchHealth()
+      .then((payload) => {
+        if (!ignore) setHealth(payload);
+      })
+      .catch(() => {
+        if (!ignore) setIsUnreachable(true);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const databaseUp = health?.database.status === 'up';
+
+  return (
+    <section aria-label="Platform status" className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+        <span className="font-medium text-slate-700">Platform status</span>
+
+        {isUnreachable && <span className="text-red-700">API unreachable</span>}
+
+        {!isUnreachable && !health && <span className="text-slate-500">Checking…</span>}
+
+        {health && (
+          <>
+            <span className="text-slate-600">
+              API: <span className="font-medium text-emerald-700">online</span> (
+              {health.environment})
+            </span>
+            <span className="text-slate-600">
+              Database:{' '}
+              {databaseUp ? (
+                <span className="font-medium text-emerald-700">
+                  connected ({health.database.latencyMs} ms)
+                </span>
+              ) : (
+                <span className="font-medium text-amber-700">
+                  unavailable - set DATABASE_URL in server/.env
+                </span>
+              )}
+            </span>
+          </>
+        )}
+      </div>
+    </section>
   );
 }

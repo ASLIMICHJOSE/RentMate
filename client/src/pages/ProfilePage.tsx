@@ -8,53 +8,68 @@ import { FormField } from '../components/ui/FormField';
 import { PageHeader } from '../components/ui/PageHeader';
 import { TextArea } from '../components/ui/TextArea';
 import { TextInput } from '../components/ui/TextInput';
+import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { DashboardLayout } from '../layouts/DashboardLayout';
-import { STUDENT_NAV } from '../layouts/dashboardNav';
+import { STUDENT_NAV, OWNER_NAV } from '../layouts/dashboardNav';
+import type { CurrentUser, UserRole } from '../types/user';
+import { getInitials } from '../utils/format';
+import { ROLE_LABELS } from '../utils/roles';
 
 const profileSchema = z.object({
   name: z.string().trim().min(2, 'Enter your full name').max(80),
   phone: z
     .string()
     .trim()
-    .regex(/^$|^\+?[0-9\s-]{7,15}$/, 'Enter a valid phone number')
-    .optional(),
-  city: z.string().trim().max(60).optional(),
-  occupation: z.string().trim().max(80).optional(),
-  education: z.string().trim().max(120).optional(),
-  bio: z.string().trim().max(500, 'Keep your bio under 500 characters').optional(),
+    .regex(/^$|^\+?[0-9\s-]{7,15}$/, 'Enter a valid phone number'),
+  city: z.string().trim().max(60),
+  occupation: z.string().trim().max(80),
+  education: z.string().trim().max(120),
+  bio: z.string().trim().max(500, 'Keep your bio under 500 characters'),
 });
 
 type ProfileValues = z.infer<typeof profileSchema>;
 
-export default function ProfilePage() {
+const roleTones: Record<UserRole, 'brand' | 'success' | 'danger'> = {
+  STUDENT: 'brand',
+  OWNER: 'success',
+  ADMIN: 'danger',
+};
+
+/** Saves arrive in Milestone 5; today the form is read-only-ish and honest about it. */
+function ProfileView({ user }: { user: CurrentUser }) {
   const { showToast } = useToast();
+
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      name: 'Aditya Sharma',
-      phone: '+91 98400 11223',
-      city: 'Chennai',
-      occupation: 'Student',
-      education: 'Anna University · Mechanical Engineering',
-      bio: 'Final-year student looking for a quiet flat close to campus.',
+      name: user.name,
+      phone: user.profile?.phone ?? '',
+      city: user.profile?.city ?? '',
+      occupation: user.profile?.occupation ?? '',
+      education: user.profile?.education ?? '',
+      bio: user.profile?.bio ?? '',
     },
   });
 
-  function onSubmit(values: ProfileValues): void {
+  async function onSubmit(values: ProfileValues): Promise<void> {
+    // The update endpoint lands in Milestone 5; keep the interaction honest.
+    await Promise.resolve(values);
     showToast({
       variant: 'info',
-      title: 'Profile saving is not connected yet',
-      description: `${values.name}'s details will be persisted by the profile API in Milestone 5.`,
+      title: 'Profile saving arrives in Milestone 5',
+      description: `Nothing was changed yet - ${values.name}'s details are still the seeded values.`,
     });
   }
 
+  const navigation = user.role === 'OWNER' ? OWNER_NAV : STUDENT_NAV;
+
   return (
-    <DashboardLayout nav={STUDENT_NAV} navLabel="Student dashboard">
+    <DashboardLayout nav={navigation} navLabel="Account navigation">
       <PageHeader
         eyebrow="Account"
         title="Your profile"
@@ -63,7 +78,10 @@ export default function ProfilePage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Personal details" />
+          <CardHeader
+            title="Personal details"
+            description="Validation runs here and again on the server before anything is stored."
+          />
 
           <form
             onSubmit={(event) => void handleSubmit(onSubmit)(event)}
@@ -114,7 +132,9 @@ export default function ProfilePage() {
             </FormField>
 
             <div>
-              <Button type="submit">Save changes</Button>
+              <Button type="submit" isLoading={isSubmitting}>
+                Save changes
+              </Button>
             </div>
           </form>
         </Card>
@@ -127,7 +147,7 @@ export default function ProfilePage() {
                 aria-hidden="true"
                 className="grid size-16 place-items-center rounded-full bg-brand-50 text-lg font-semibold text-brand-700"
               >
-                AS
+                {getInitials(user.name)}
               </span>
               <div>
                 <Button variant="outline" size="sm" disabled title="Uploads arrive in Milestone 15">
@@ -147,27 +167,49 @@ export default function ProfilePage() {
             <dl className="mt-4 space-y-3 text-sm">
               <div>
                 <dt className="text-slate-500">Signed in as</dt>
-                <dd className="font-medium text-slate-900">aditya@example.com</dd>
+                <dd className="font-medium text-slate-900">{user.email}</dd>
               </div>
               <div>
                 <dt className="text-slate-500">Role</dt>
                 <dd className="mt-1">
-                  <Badge tone="brand">Student</Badge>
+                  <Badge tone={roleTones[user.role]}>{ROLE_LABELS[user.role]}</Badge>
                 </dd>
               </div>
               <div>
                 <dt className="text-slate-500">Account status</dt>
                 <dd className="mt-1">
-                  <Badge tone="success">Active</Badge>
+                  <Badge tone={user.isActive ? 'success' : 'danger'}>
+                    {user.isActive ? 'Active' : 'Suspended'}
+                  </Badge>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Member since</dt>
+                <dd className="text-slate-800">
+                  {new Date(user.createdAt).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
                 </dd>
               </div>
             </dl>
             <p className="mt-4 text-xs text-slate-500">
-              Role and status come from the authenticated session (Milestone 4).
+              Role and status come from your session and are re-checked on the server for every
+              request.
             </p>
           </Card>
         </div>
       </div>
     </DashboardLayout>
   );
+}
+
+export default function ProfilePage() {
+  const { user } = useAuth();
+
+  // ProtectedRoute guarantees a signed-in user before this page renders.
+  if (!user) return null;
+
+  return <ProfileView user={user} />;
 }

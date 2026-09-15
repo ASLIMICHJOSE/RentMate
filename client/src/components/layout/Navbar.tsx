@@ -1,29 +1,57 @@
 import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
-import { buttonStyles } from '../ui/buttonStyles';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
+import { useToast } from '../../hooks/useToast';
+import type { UserRole } from '../../types/user';
 import { cn } from '../../utils/cn';
+import { ROLE_LABELS } from '../../utils/roles';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { buttonStyles } from '../ui/buttonStyles';
 
-const primaryLinks = [
+interface NavLinkItem {
+  to: string;
+  label: string;
+}
+
+const publicLinks: NavLinkItem[] = [
   { to: '/properties', label: 'Properties' },
   { to: '/roommates', label: 'Roommates' },
 ];
 
-const secondaryLinks = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/profile', label: 'Profile' },
-];
+/** Role-specific destinations. The server enforces the same rules. */
+const roleLinks: Record<UserRole, NavLinkItem[]> = {
+  STUDENT: [
+    { to: '/dashboard', label: 'Dashboard' },
+    { to: '/saved', label: 'Saved' },
+    { to: '/requests', label: 'Requests' },
+    { to: '/messages', label: 'Messages' },
+  ],
+  OWNER: [
+    { to: '/owner', label: 'My listings' },
+    { to: '/messages', label: 'Messages' },
+  ],
+  ADMIN: [
+    { to: '/admin', label: 'Admin' },
+    { to: '/messages', label: 'Messages' },
+  ],
+};
 
-/**
- * Site header.
- *
- * Role-aware navigation ("Owner dashboard" / "Admin" links and a signed-in user
- * menu) is added in Milestone 4 once authentication exists; for now it always
- * offers sign in / sign up, which are real routes.
- */
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, status, logout } = useAuth();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
 
+  const links = user ? [...publicLinks, ...roleLinks[user.role]] : publicLinks;
   const closeMenu = () => setIsMenuOpen(false);
+
+  async function handleSignOut(): Promise<void> {
+    closeMenu();
+    await logout();
+    showToast({ variant: 'success', title: 'Signed out', description: 'See you next time.' });
+    navigate('/');
+  }
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -47,31 +75,64 @@ export function Navbar() {
             <span className="text-lg font-bold tracking-tight text-slate-900">RentMate</span>
           </Link>
 
-          <div className="hidden items-center gap-1 md:flex">
-            {primaryLinks.map((link) => (
-              <NavLink key={link.to} to={link.to} className={navLinkClass}>
-                {link.label}
-              </NavLink>
-            ))}
-            {secondaryLinks.map((link) => (
+          <div className="hidden items-center gap-1 lg:flex">
+            {links.map((link) => (
               <NavLink key={link.to} to={link.to} className={navLinkClass}>
                 {link.label}
               </NavLink>
             ))}
           </div>
 
-          <div className="hidden items-center gap-2 md:flex">
-            <Link to="/login" className={buttonStyles({ variant: 'outline', size: 'sm' })}>
-              Log in
-            </Link>
-            <Link to="/register" className={buttonStyles({ size: 'sm' })}>
-              Sign up
-            </Link>
+          <div className="hidden items-center gap-3 lg:flex">
+            {status === 'loading' && (
+              <span className="text-sm text-slate-400">Checking session…</span>
+            )}
+
+            {status === 'anonymous' && (
+              <>
+                <Link to="/login" className={buttonStyles({ variant: 'outline', size: 'sm' })}>
+                  Log in
+                </Link>
+                <Link to="/register" className={buttonStyles({ size: 'sm' })}>
+                  Sign up
+                </Link>
+              </>
+            )}
+
+            {user && (
+              <>
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-100"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="grid size-8 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700"
+                  >
+                    {user.name
+                      .split(' ')
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((part) => part[0]?.toUpperCase() ?? '')
+                      .join('')}
+                  </span>
+                  <span className="max-w-32 truncate text-sm font-medium text-slate-800">
+                    {user.name}
+                  </span>
+                  <Badge tone={user.role === 'ADMIN' ? 'danger' : 'brand'}>
+                    {ROLE_LABELS[user.role]}
+                  </Badge>
+                </Link>
+                <Button variant="outline" size="sm" onClick={() => void handleSignOut()}>
+                  Sign out
+                </Button>
+              </>
+            )}
           </div>
 
           <button
             type="button"
-            className="rounded-md p-2 text-slate-700 hover:bg-slate-100 md:hidden"
+            className="rounded-md p-2 text-slate-700 hover:bg-slate-100 lg:hidden"
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
             onClick={() => setIsMenuOpen((open) => !open)}
@@ -98,9 +159,9 @@ export function Navbar() {
         </div>
 
         {isMenuOpen && (
-          <div id="mobile-menu" className="border-t border-slate-200 py-3 md:hidden">
+          <div id="mobile-menu" className="border-t border-slate-200 py-3 lg:hidden">
             <div className="flex flex-col gap-1">
-              {[...primaryLinks, ...secondaryLinks].map((link) => (
+              {links.map((link) => (
                 <NavLink
                   key={link.to}
                   to={link.to}
@@ -115,22 +176,59 @@ export function Navbar() {
                   {link.label}
                 </NavLink>
               ))}
+
+              {user && (
+                <NavLink
+                  to="/profile"
+                  onClick={closeMenu}
+                  className={({ isActive }) =>
+                    cn(
+                      'rounded-md px-3 py-2 text-sm font-medium',
+                      isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-700 hover:bg-slate-100',
+                    )
+                  }
+                >
+                  Profile
+                </NavLink>
+              )}
             </div>
-            <div className="mt-3 flex gap-2">
-              <Link
-                to="/login"
-                onClick={closeMenu}
-                className={buttonStyles({ variant: 'outline', size: 'sm', fullWidth: true })}
-              >
-                Log in
-              </Link>
-              <Link
-                to="/register"
-                onClick={closeMenu}
-                className={buttonStyles({ size: 'sm', fullWidth: true })}
-              >
-                Sign up
-              </Link>
+
+            <div className="mt-3 flex flex-col gap-2">
+              {status === 'anonymous' && (
+                <>
+                  <Link
+                    to="/login"
+                    onClick={closeMenu}
+                    className={buttonStyles({ variant: 'outline', size: 'sm', fullWidth: true })}
+                  >
+                    Log in
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={closeMenu}
+                    className={buttonStyles({ size: 'sm', fullWidth: true })}
+                  >
+                    Sign up
+                  </Link>
+                </>
+              )}
+
+              {user && (
+                <>
+                  <p className="px-1 text-sm text-slate-600">
+                    Signed in as <span className="font-medium text-slate-900">{user.name}</span> (
+                    {ROLE_LABELS[user.role]})
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    fullWidth
+                    onClick={() => void handleSignOut()}
+                  >
+                    Sign out
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}

@@ -1,5 +1,6 @@
 import { env, isDevelopment, isProduction } from './config/env.js';
 import express, { type Express } from 'express';
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -39,6 +40,8 @@ export function createApp(): Express {
   // --- Parsing -------------------------------------------------------------
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+  // Reads the httpOnly session cookie set by the auth endpoints.
+  app.use(cookieParser());
 
   // --- Observability -------------------------------------------------------
   if (isDevelopment) {
