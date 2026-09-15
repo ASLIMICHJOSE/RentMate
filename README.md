@@ -4,9 +4,11 @@ A full-stack rental and roommate platform for students and young professionals: 
 rentals, find compatible roommates, manage listings, request visits, chat in real time and
 moderate everything from an admin dashboard.
 
-> **Status: Milestone 1 of 18 complete — project foundation.**
-> The client and server run, the `/api/health` endpoint is live, and tooling (TypeScript,
-> ESLint, Prettier, env handling) is configured. See [Roadmap](#roadmap) for what lands next.
+> **Status: Milestone 2 of 18 complete — frontend foundation.**
+> The API runs with a health endpoint, and the client ships a full UI foundation: routed pages,
+> a reusable component library, forms with Zod validation, toast notifications and
+> loading/empty/error states. Listing and roommate data is still mock data — the database lands
+> in Milestone 3. See [Roadmap](#roadmap) for what comes next.
 
 ---
 
@@ -43,17 +45,24 @@ on the server (the client is never trusted).
 ```
 rentmate/
 ├── client/                  # React + Vite + TypeScript SPA
-│   ├── public/
+│   ├── public/              # static assets + placeholder images
 │   ├── src/
-│   │   ├── pages/           # route-level screens
+│   │   ├── pages/           # route-level screens (auth/, properties/, dashboard/, owner/, admin/)
+│   │   ├── components/
+│   │   │   ├── ui/          # Button, Card, Modal, form controls, states, Badge, Skeleton
+│   │   │   ├── layout/      # Navbar, Footer
+│   │   │   ├── property/    # PropertyCard, SearchBar, FilterPanel, PropertyGallery
+│   │   │   ├── roommate/    # RoommateCard with compatibility breakdown
+│   │   │   ├── dashboard/   # ActivityList
+│   │   │   └── feedback/    # Toaster
+│   │   ├── layouts/         # RootLayout, DashboardLayout, per-role nav config
+│   │   ├── hooks/           # useToast, useDebouncedValue
+│   │   ├── context/         # ToastProvider + context
+│   │   ├── data/            # MOCK data + mock API layer (replaced in Milestones 3-7)
 │   │   ├── services/        # API layer (single Axios instance)
 │   │   ├── types/           # shared client types
-│   │   ├── components/      # (Milestone 2) reusable UI
-│   │   ├── layouts/         # (Milestone 2) shell layouts
-│   │   ├── hooks/           # (Milestone 2) reusable hooks
-│   │   ├── context/         # (Milestone 4) auth/theme providers
-│   │   ├── utils/           # (Milestone 2) helpers
-│   │   ├── App.tsx
+│   │   ├── utils/           # formatting, label maps, classnames
+│   │   ├── App.tsx          # lazy-loaded route table
 │   │   └── main.tsx
 │   ├── .env.example
 │   └── vite.config.ts
@@ -109,6 +118,32 @@ proxy and reports whether the API is reachable.
 | `npm run lint`           | ESLint in every workspace                                |
 | `npm run format`         | Prettier write across the repo                           |
 | `npm run verify`         | typecheck + lint + Prettier check (run before committing)|
+
+## Frontend structure
+
+Routes are code-split with `React.lazy` and rendered inside `RootLayout` (navbar, footer, skip
+link) or `DashboardLayout` (per-role sidebar):
+
+| Route                      | Page                        | State                              |
+| -------------------------- | --------------------------- | ---------------------------------- |
+| `/`                        | Home                        | done                               |
+| `/login`, `/register`      | Auth forms                  | validated; submits in Milestone 4  |
+| `/properties`              | Property discovery          | filters mock data; API in M7       |
+| `/properties/:id`          | Property details            | gallery, facts, owner card         |
+| `/roommates`               | Roommate discovery          | scores are sample values (M11)     |
+| `/dashboard`               | Student dashboard           | sample metrics (M13)               |
+| `/saved`, `/requests`, `/messages` | Student sub-pages   | empty states until M9, M12-M14     |
+| `/profile`                 | Profile + edit form         | persists in Milestone 5            |
+| `/owner`                   | Owner dashboard             | listings table, CRUD in M6         |
+| `/admin`                   | Admin dashboard             | modules land in M17-M18            |
+| `*`                        | Not found                   | done                               |
+
+UI conventions: one Axios instance in `services/http.ts` (never `fetch` in components), toasts
+via `useToast()`, forms through React Hook Form + Zod, and every async view has loading, empty
+and error states. Destinations that are not built yet render **disabled** with the milestone that
+delivers them rather than linking to a dead route. All mock data lives in `src/data/`: pages
+either call the async mock API layer (`data/mockApi.ts`, replaced by `services/` in Milestone 7)
+or read a documented fixture for a dashboard table. Nothing else in the app imports fixtures.
 
 ## Environment variables
 
@@ -167,17 +202,26 @@ Implemented in Milestone 1 and kept active throughout development:
 ## Testing
 
 Automated tests arrive with the features they cover (Milestone 4 onward) so each milestone is
-verified before the next one starts. Until then, every milestone is validated manually against
-the running app plus `npm run verify`. Postman/Thunder Client collections will be documented here
-as endpoints land.
+verified before the next one starts. Until then each milestone is checked with:
+
+```bash
+npm run verify                       # typecheck + ESLint + Prettier
+npm run build                        # production build of both workspaces
+npm run dev                          # then walk the routes in a browser
+```
+
+For Milestone 1/2 the API was probed directly (`GET /api/health`, a 404 route and malformed
+JSON) and every client page module was requested through the Vite dev server to confirm it
+transforms without errors. Postman/Thunder Client collections will be documented here as
+endpoints land.
 
 ## Roadmap
 
 | #   | Milestone                        | Status |
 | --- | -------------------------------- | ------ |
 | 1   | Project foundation               | ✅ done |
-| 2   | Frontend foundation (UI + routes)| ⏳ next |
-| 3   | Database setup (Prisma)          | ☐      |
+| 2   | Frontend foundation (UI + routes)| ✅ done |
+| 3   | Database setup (Prisma)          | ⏳ next |
 | 4   | Authentication                   | ☐      |
 | 5   | Profile management               | ☐      |
 | 6   | Property CRUD                    | ☐      |
