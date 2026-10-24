@@ -13,22 +13,22 @@ export const STUDENT_NAV: DashboardNavItem[] = [
   { label: 'Messages', to: '/messages' },
   { label: 'Browse properties', to: '/properties' },
   { label: 'Find roommates', to: '/roommates' },
-  { label: 'Roommate profile', unavailableReason: 'Roommate preferences arrive in Milestone 10' },
+  { label: 'Roommate profile', to: '/profile' },
 ];
 
 export const OWNER_NAV: DashboardNavItem[] = [
-  { label: 'Overview', to: '/owner' },
-  { label: 'My properties', unavailableReason: 'Property management arrives in Milestone 6' },
-  { label: 'Add property', unavailableReason: 'Listing creation arrives in Milestone 6' },
-  { label: 'Visit requests', unavailableReason: 'Visit scheduling arrives in Milestone 13' },
+  { label: 'Overview & Listings', to: '/owner' },
   { label: 'Messages', to: '/messages' },
-  { label: 'Reviews', unavailableReason: 'Reviews arrive in Milestone 16' },
+  { label: 'Browse properties', to: '/properties' },
+  { label: 'Profile settings', to: '/profile' },
 ];
 
 export const ADMIN_NAV: DashboardNavItem[] = [
-  { label: 'Overview', to: '/admin' },
-  { label: 'Users', unavailableReason: 'User management arrives in Milestone 18' },
-  { label: 'Properties', unavailableReason: 'Listing moderation arrives in Milestone 18' },
-  { label: 'Reports', unavailableReason: 'Report handling arrives in Milestone 17' },
-  { label: 'Analytics', unavailableReason: 'Platform statistics arrive in Milestone 18' },
+  { label: 'Platform Overview', to: '/admin' },
+  { label: 'Property Moderation', to: '/admin' },
+  { label: 'User Accounts', to: '/admin' },
+  { label: 'Safety Reports', to: '/admin' },
+  { label: 'Messages', to: '/messages' },
+  { label: 'Live Marketplace', to: '/properties' },
 ];
+

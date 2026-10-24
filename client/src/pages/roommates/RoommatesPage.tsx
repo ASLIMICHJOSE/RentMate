@@ -4,22 +4,21 @@ import { SearchBar } from '../../components/property/SearchBar';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { ErrorState } from '../../components/ui/ErrorState';
 import { FormField } from '../../components/ui/FormField';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Select } from '../../components/ui/Select';
 import { TextInput } from '../../components/ui/TextInput';
-import { fetchRoommateMatches } from '../../data/mockApi';
-import { getMockRoommateCityOptions } from '../../data/mockRoommates';
+import { AppStore } from '../../services/store';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { ApiRequestError } from '../../services/http';
 import {
   EMPTY_ROOMMATE_FILTERS,
   GENDER_PREFERENCES,
-  type GenderPreference,
   type RoommateFilters,
   type RoommateMatch,
+  type SleepSchedule,
+  type FoodPreference,
+  type CleanlinessLevel,
 } from '../../types/roommate';
 import { GENDER_PREFERENCE_LABELS } from '../../utils/labels';
 
@@ -28,183 +27,241 @@ const GENDER_OPTIONS = GENDER_PREFERENCES.map((value) => ({
   label: GENDER_PREFERENCE_LABELS[value],
 }));
 
-interface MatchesState {
-  status: 'loading' | 'ready' | 'error';
-  key: string;
-  matches?: RoommateMatch[];
-  error?: string;
-  errorCode?: string;
-}
-
 export default function RoommatesPage() {
   const [filters, setFilters] = useState<RoommateFilters>(EMPTY_ROOMMATE_FILTERS);
-  const [state, setState] = useState<MatchesState>({ status: 'loading', key: '' });
-  const [attempt, setAttempt] = useState(0);
+
+  // Live Compatibility Preferences State
+  const [mySleep, setMySleep] = useState<SleepSchedule>('EARLY_BIRD');
+  const [myFood, setMyFood] = useState<FoodPreference>('VEGETARIAN');
+  const [myCleanliness, setMyCleanliness] = useState<CleanlinessLevel>('TIDY');
+  const [myBudgetMax, setMyBudgetMax] = useState<number>(15000);
+  const [isTunerOpen, setIsTunerOpen] = useState(true);
 
   const debouncedQuery = useDebouncedValue(filters.q);
-  const effectiveFilters = useMemo<RoommateFilters>(
-    () => ({ ...filters, q: debouncedQuery }),
-    [filters, debouncedQuery],
-  );
-  const filterKey = useMemo(() => JSON.stringify(effectiveFilters), [effectiveFilters]);
 
-  useEffect(() => {
-    let ignore = false;
+  // Dynamic Matches Calculation based on active preferences
+  const matches = useMemo<RoommateMatch[]>(() => {
+    const raw = AppStore.calculateRoommateMatches({
+      sleepSchedule: mySleep,
+      foodPreference: myFood,
+      cleanliness: myCleanliness,
+      budgetMax: myBudgetMax,
+      city: filters.city || undefined,
+    });
 
-    fetchRoommateMatches(effectiveFilters)
-      .then((matches) => {
-        if (ignore) return;
-        setState({ status: 'ready', key: filterKey, matches });
-      })
-      .catch((caught: unknown) => {
-        if (ignore) return;
-        setState({
-          status: 'error',
-          key: filterKey,
-          error:
-            caught instanceof ApiRequestError
-              ? caught.message
-              : 'We could not load roommate matches right now.',
-          errorCode: caught instanceof ApiRequestError ? caught.code : undefined,
-        });
-      });
+    const query = debouncedQuery.trim().toLowerCase();
 
-    return () => {
-      ignore = true;
-    };
-  }, [effectiveFilters, filterKey, attempt]);
+    return raw.filter(({ profile }) => {
+      if (query) {
+        const haystack = `${profile.name} ${profile.city} ${profile.occupation} ${
+          profile.institute ?? ''
+        } ${profile.bio}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+
+      if (filters.city && profile.city !== filters.city) return false;
+
+      if (filters.budgetMax && profile.budgetMin > Number(filters.budgetMax)) {
+        return false;
+      }
+
+      if (filters.genderPreference && profile.genderPreference !== filters.genderPreference) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [mySleep, myFood, myCleanliness, myBudgetMax, filters.city, filters.budgetMax, filters.genderPreference, debouncedQuery]);
 
   const cityOptions = useMemo(
-    () => getMockRoommateCityOptions().map((city) => ({ value: city, label: city })),
+    () => ['Chennai', 'Bengaluru', 'Pune', 'Hyderabad', 'Mumbai'].map((c) => ({ value: c, label: c })),
     [],
   );
 
-  const isStale = state.key !== filterKey;
-  const isLoading = isStale || state.status === 'loading';
-  const isError = !isStale && state.status === 'error';
-  const matches = isStale ? undefined : state.matches;
-
-  function update(patch: Partial<RoommateFilters>): void {
+  function updateFilters(patch: Partial<RoommateFilters>): void {
     setFilters((current) => ({ ...current, ...patch }));
-  }
-
-  function handleRetry(): void {
-    setState({ status: 'loading', key: filterKey });
-    setAttempt((current) => current + 1);
   }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
       <PageHeader
         eyebrow="Roommates"
-        title="Find a flatmate who fits"
-        description="Every match shows exactly how the compatibility score was calculated: budget, location, lifestyle, sleep, food and preferences."
+        title="Find a flatmate who fits your life"
+        description="Transparent, deterministic compatibility algorithm: tweak your lifestyle preferences below and watch scores update in real time."
       />
 
+      {/* Interactive Compatibility Tuner Banner */}
+      <div className="mt-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="grid size-6 place-items-center rounded-full bg-brand-500 text-xs font-bold">⚡</span>
+              <h2 className="font-heading text-lg font-bold">Interactive Compatibility Matcher</h2>
+            </div>
+            <p className="mt-1 text-xs text-slate-300">
+              Customize your daily routine & budget to instantly recalculate compatibility scores across all flatmates.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsTunerOpen(!isTunerOpen)}
+            className="text-white border-white/30 hover:bg-white/10"
+          >
+            {isTunerOpen ? 'Hide Preferences' : 'Adjust Preferences'}
+          </Button>
+        </div>
+
+        {isTunerOpen && (
+          <div className="mt-5 grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                My Sleep Schedule
+              </label>
+              <select
+                value={mySleep}
+                onChange={(e) => setMySleep(e.target.value as SleepSchedule)}
+                className="mt-1.5 w-full rounded-xl bg-slate-800/80 border border-slate-700 px-3 py-2 text-xs font-semibold text-white focus:outline-brand-400"
+              >
+                <option value="EARLY_BIRD">🌅 Early Bird (Sleeps 10 PM)</option>
+                <option value="FLEXIBLE">⚖️ Flexible / Standard</option>
+                <option value="NIGHT_OWL">🦉 Night Owl (Sleeps 2 AM)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                My Food Habit
+              </label>
+              <select
+                value={myFood}
+                onChange={(e) => setMyFood(e.target.value as FoodPreference)}
+                className="mt-1.5 w-full rounded-xl bg-slate-800/80 border border-slate-700 px-3 py-2 text-xs font-semibold text-white focus:outline-brand-400"
+              >
+                <option value="VEGETARIAN">🥗 Pure Vegetarian</option>
+                <option value="EGGETARIAN">🍳 Eggetarian</option>
+                <option value="NON_VEGETARIAN">🍗 Non-Vegetarian</option>
+                <option value="VEGAN">🌱 Vegan</option>
+                <option value="NO_PREFERENCE">🍽️ No Preference</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                Cleanliness Routine
+              </label>
+              <select
+                value={myCleanliness}
+                onChange={(e) => setMyCleanliness(e.target.value as CleanlinessLevel)}
+                className="mt-1.5 w-full rounded-xl bg-slate-800/80 border border-slate-700 px-3 py-2 text-xs font-semibold text-white focus:outline-brand-400"
+              >
+                <option value="SPOTLESS">✨ Spotless & Organised</option>
+                <option value="TIDY">🧼 Tidy & Clean Daily</option>
+                <option value="AVERAGE">🧹 Average / Normal</option>
+                <option value="RELAXED">🛋️ Relaxed & Casual</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                Max Monthly Budget (₹{myBudgetMax.toLocaleString()})
+              </label>
+              <input
+                type="range"
+                min="6000"
+                max="30000"
+                step="1000"
+                value={myBudgetMax}
+                onChange={(e) => setMyBudgetMax(Number(e.target.value))}
+                className="mt-3 w-full accent-brand-500 cursor-pointer"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Search & Location Filters */}
       <div className="mt-6">
         <SearchBar
           label="Search roommates"
-          placeholder="Search by name, college or city"
+          placeholder="Search by name, university (e.g. Anna University, IIT Madras), or locality..."
           value={filters.q}
-          onChange={(value) => update({ q: value })}
+          onChange={(value) => updateFilters({ q: value })}
         />
       </div>
 
-      <Card className="mt-6">
-        <h2 className="text-base font-semibold text-slate-900">Refine your search</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <FormField id="roommate-city" label="City">
+      <Card className="mt-6 rounded-2xl border-slate-200/80 shadow-xs">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <FormField id="roommate-city" label="Filter City">
             {(field) => (
               <Select
                 {...field}
                 value={filters.city}
-                placeholder="Any city"
-                options={cityOptions}
-                onChange={(event) => update({ city: event.target.value })}
+                onChange={(event) => updateFilters({ city: event.target.value })}
+                options={[{ value: '', label: 'All Cities' }, ...cityOptions]}
               />
             )}
           </FormField>
 
-          <FormField id="roommate-budget" label="Maximum monthly budget (₹)">
-            {(field) => (
-              <TextInput
-                {...field}
-                type="number"
-                min={0}
-                step={1000}
-                inputMode="numeric"
-                placeholder="e.g. 15000"
-                value={filters.budgetMax}
-                onChange={(event) => update({ budgetMax: event.target.value })}
-              />
-            )}
-          </FormField>
-
-          <FormField id="roommate-gender" label="Preferred flatmate">
+          <FormField id="roommate-gender" label="Gender Preference">
             {(field) => (
               <Select
                 {...field}
                 value={filters.genderPreference}
-                placeholder="Any preference"
-                options={GENDER_OPTIONS}
-                onChange={(event) =>
-                  update({ genderPreference: event.target.value as GenderPreference | '' })
-                }
+                onChange={(event) => updateFilters({ genderPreference: event.target.value as any })}
+                options={[{ value: '', label: 'Any Preference' }, ...GENDER_OPTIONS]}
+              />
+            )}
+          </FormField>
+
+          <FormField id="roommate-budget" label="Max Budget Limit">
+            {(field) => (
+              <TextInput
+                {...field}
+                type="number"
+                placeholder="e.g. 15000"
+                value={filters.budgetMax}
+                onChange={(event) => updateFilters({ budgetMax: event.target.value })}
               />
             )}
           </FormField>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-4"
-          onClick={() => setFilters(EMPTY_ROOMMATE_FILTERS)}
-        >
-          Clear filters
-        </Button>
       </Card>
 
-      <p className="mt-6 text-sm text-slate-600" aria-live="polite">
-        {isLoading
-          ? 'Finding matches…'
-          : `${matches?.length ?? 0} ${matches?.length === 1 ? 'match' : 'matches'} found`}
-      </p>
+      {/* Results Header */}
+      <div className="mt-8 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">
+          Found <span className="font-extrabold text-brand-600">{matches.length}</span> compatible roommate matches
+        </p>
+        <span className="text-xs text-slate-500">Sorted by highest compatibility percentage</span>
+      </div>
 
-      <div className="mt-4">
-        {isLoading && <LoadingState message="Scoring potential flatmates…" />}
-
-        {isError && (
-          <ErrorState
-            title="Could not load matches"
-            message={state.error ?? 'Please try again.'}
-            code={state.errorCode}
-            onRetry={handleRetry}
-          />
-        )}
-
-        {!isLoading && !isError && matches && matches.length === 0 && (
+      {/* Roommates Grid */}
+      {matches.length === 0 ? (
+        <div className="mt-6">
           <EmptyState
-            title="No roommates match yet"
-            message="Adjust the city or raise your budget to see more students looking for a flatmate."
+            title="No matches found"
+            message="Try widening your search terms, adjusting budget limits, or clearing city filters."
             action={
-              <Button variant="outline" onClick={() => setFilters(EMPTY_ROOMMATE_FILTERS)}>
-                Clear filters
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFilters(EMPTY_ROOMMATE_FILTERS)}
+              >
+                Reset filters
               </Button>
             }
           />
-        )}
-
-        {!isLoading && !isError && matches && matches.length > 0 && (
-          <ul className="grid gap-6 lg:grid-cols-2">
-            {matches.map((match) => (
-              <li key={match.profile.id}>
-                <RoommateCard match={match} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+        </div>
+      ) : (
+        <ul className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {matches.map((match) => (
+            <li key={match.profile.id}>
+              <RoommateCard match={match} />
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

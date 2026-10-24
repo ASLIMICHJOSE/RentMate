@@ -112,11 +112,35 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-          Sessions use an httpOnly cookie with a signed JWT. After seeding, a demo student account
-          is <span className="font-mono">aditya.student@rentmate.dev</span> with password{' '}
-          <span className="font-mono">Password123!</span>.
-        </p>
+        {/* 1-Click Quick Demo Accounts */}
+        <div className="mt-6 border-t border-slate-100 pt-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2.5">
+            Instant Demo Sign-in:
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => void onSubmit({ email: 'aditya.student@rentmate.dev', password: 'Password123!' })}
+              className="rounded-xl border border-brand-200 bg-brand-50 p-2 text-center text-xs font-bold text-brand-700 hover:bg-brand-100 transition shadow-xs"
+            >
+              🎓 Student
+            </button>
+            <button
+              type="button"
+              onClick={() => void onSubmit({ email: 'priya.owner@rentmate.dev', password: 'Password123!' })}
+              className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-center text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-xs"
+            >
+              🏡 Owner
+            </button>
+            <button
+              type="button"
+              onClick={() => void onSubmit({ email: 'admin@rentmate.dev', password: 'Password123!' })}
+              className="rounded-xl border border-purple-200 bg-purple-50 p-2 text-center text-xs font-bold text-purple-800 hover:bg-purple-100 transition shadow-xs"
+            >
+              🛡️ Admin
+            </button>
+          </div>
+        </div>
       </Card>
 
       <p className="text-center text-sm text-slate-600">

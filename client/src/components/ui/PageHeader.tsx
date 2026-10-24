@@ -12,15 +12,21 @@ export interface PageHeaderProps {
 
 export function PageHeader({ title, description, eyebrow, actions, className }: PageHeaderProps) {
   return (
-    <div className={cn('flex flex-wrap items-end justify-between gap-4', className)}>
+    <div className={cn('flex flex-wrap items-end justify-between gap-4 border-b border-[#e8e2d8] pb-5 mb-8', className)}>
       <div className="max-w-2xl">
         {eyebrow && (
-          <p className="text-xs font-semibold tracking-wide text-brand-600 uppercase">{eyebrow}</p>
+          <p className="text-xs font-semibold tracking-widest text-[#c8643c] uppercase mb-1.5">
+            {eyebrow}
+          </p>
         )}
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+        <h1 className="font-serif text-3xl sm:text-4xl font-medium tracking-tight text-[#141a24]">
           {title}
         </h1>
-        {description && <p className="mt-2 text-sm text-slate-600">{description}</p>}
+        {description && (
+          <p className="mt-2 text-sm text-[#5e6676] leading-relaxed">
+            {description}
+          </p>
+        )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

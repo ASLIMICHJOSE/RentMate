@@ -1,16 +1,21 @@
 import type { Property, PropertyFilters, PropertyImage } from '../types/property';
+import { AppStore } from '../services/store';
 
-/**
- * MOCK DATA - Milestone 2 only.
- *
- * These fixtures let the UI, loading/empty/error states and filtering forms be
- * built before the database exists. Milestone 7 replaces this module with real
- * `/api/properties` queries; nothing else in the app should import fixtures.
- */
-
-const imageA: PropertyImage = { id: 'img-1', imageUrl: '/images/property-1.svg', sortOrder: 0 };
-const imageB: PropertyImage = { id: 'img-2', imageUrl: '/images/property-2.svg', sortOrder: 1 };
-const imageC: PropertyImage = { id: 'img-3', imageUrl: '/images/property-3.svg', sortOrder: 2 };
+const imageA: PropertyImage = {
+  id: 'img-1',
+  imageUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+  sortOrder: 0,
+};
+const imageB: PropertyImage = {
+  id: 'img-2',
+  imageUrl: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80',
+  sortOrder: 1,
+};
+const imageC: PropertyImage = {
+  id: 'img-3',
+  imageUrl: 'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=1200&q=80',
+  sortOrder: 2,
+};
 
 const allImages = [imageA, imageB, imageC];
 const galleryAB = [imageA, imageB];
@@ -322,17 +327,15 @@ export function sortProperties(properties: Property[], sort: PropertyFilters['so
 
 /** Distinct cities present in the mock data, for the filter panel. */
 export function getMockCityOptions(): string[] {
-  return [...new Set(MOCK_PROPERTIES.map((property) => property.city))].sort();
+  const all = AppStore.getProperties();
+  return [...new Set(all.map((property) => property.city))].sort();
 }
 
 export function findMockProperty(id: string): Property | undefined {
-  return MOCK_PROPERTIES.find((property) => property.id === id);
+  return AppStore.getPropertyById(id) ?? MOCK_PROPERTIES.find((property) => property.id === id);
 }
 
 export function getMockSavedProperties(): Property[] {
-  return MOCK_PROPERTIES.filter((property) =>
-    ['a3f1c4d2-1111-4a11-9c11-000000000001', 'a3f1c4d2-3333-4a11-9c11-000000000003'].includes(
-      property.id,
-    ),
-  );
+  return AppStore.getSavedProperties();
 }
+

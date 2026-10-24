@@ -1,35 +1,137 @@
 @import 'tailwindcss';
 
-/* Design tokens - keep colours/spacing consistent across the app. */
-@theme {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-200: #bfdbfe;
-  --color-brand-300: #93c5fd;
-  --color-brand-400: #60a5fa;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
-  --color-brand-800: #1e40af;
-  --color-brand-900: #1e3a8a;
+/* =========================================================================
+   WARM ARCHITECTURAL EDITORIAL DESIGN SYSTEM
+   Palette: Warm Terracotta Clay, Deep Obsidian Charcoal, Linen Oatmeal, Forest Sage
+   Typography Combo: Playfair Display (Editorial Serif) + Plus Jakarta Sans (Geometric Interface)
+   ========================================================================= */
 
-  --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-    sans-serif;
+@theme {
+  --color-canvas: #fcfaf7;
+  --color-canvas-subtle: #f5f0e8;
+  --color-surface: #ffffff;
+  --color-obsidian: #141a24;
+  --color-obsidian-muted: #5e6676;
+  --color-terracotta: #c8643c;
+  --color-terracotta-dark: #a84c27;
+  --color-terracotta-light: #fbf2ec;
+  --color-sage: #2a5745;
+  --color-sage-light: #eff5f1;
+  --color-brass: #c59b4c;
+  --color-border: #e8e2d8;
+  --color-border-subtle: #f2ede5;
+
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif;
 }
 
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    background-color: var(--color-canvas);
+    color: var(--color-obsidian);
     font-family: var(--font-sans);
+    overflow-x: hidden;
   }
 
-  /* Visible, consistent keyboard focus states (accessibility). */
-  :focus-visible {
-    @apply outline-2 outline-offset-2 outline-brand-600;
+  /* Refined Editorial Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
   }
+  ::-webkit-scrollbar-track {
+    background: #f5f0e8;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d4cbbe;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #c8643c;
+  }
+}
+
+/* Subtle Architectural Grid Pattern */
+.architectural-grid {
+  background-image: 
+    linear-gradient(to right, rgba(200, 100, 60, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(200, 100, 60, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Soft Linen Background */
+.linen-subtle {
+  background-color: #faf7f2;
+  background-image: radial-gradient(rgba(20, 26, 36, 0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Editorial Glass & Card Surfaces */
+.editorial-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 20px -2px rgba(20, 26, 36, 0.05);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.editorial-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 36px -4px rgba(20, 26, 36, 0.09);
+  border-color: rgba(200, 100, 60, 0.3);
+}
+
+.editorial-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(232, 226, 216, 0.8);
+}
+
+/* Elegant Pill & Badge */
+.editorial-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #f5f0e8;
+  color: #141a24;
+  border: 1px solid #e8e2d8;
+}
+
+/* Keyframes for subtle luxury transitions */
+@keyframes editorialFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-fade-up {
+  animation: editorialFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-gentle-float {
+  animation: gentleFloat 5s ease-in-out infinite;
 }

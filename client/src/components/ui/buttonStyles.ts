@@ -4,22 +4,26 @@ export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'dan
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const baseStyles =
-  'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex items-center justify-center gap-2 rounded-xl font-sans font-semibold transition-all duration-200 cursor-pointer ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98]';
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 focus-visible:outline-brand-600',
-  secondary: 'bg-slate-900 text-white hover:bg-slate-800 focus-visible:outline-slate-900',
+  primary:
+    'bg-[#c8643c] text-white hover:bg-[#a84c27] shadow-[0_4px_14px_rgba(200,100,60,0.25)] hover:shadow-[0_6px_20px_rgba(200,100,60,0.35)] focus-visible:outline-[#c8643c]',
+  secondary:
+    'bg-[#141a24] text-white hover:bg-[#232c3d] shadow-[0_4px_14px_rgba(20,26,36,0.15)] focus-visible:outline-[#141a24]',
   outline:
-    'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 focus-visible:outline-brand-600',
-  ghost: 'text-slate-700 hover:bg-slate-100 focus-visible:outline-brand-600',
-  danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:outline-red-600',
+    'bg-white text-[#141a24] border border-[#e8e2d8] hover:bg-[#f7f4ee] hover:border-[#c8643c]/40 focus-visible:outline-[#c8643c]',
+  ghost:
+    'bg-transparent text-[#141a24] hover:bg-[#f5f0e8] focus-visible:outline-[#c8643c]',
+  danger:
+    'bg-rose-600 text-white hover:bg-rose-700 focus-visible:outline-rose-600',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-5 py-2.5 text-base',
+  sm: 'px-3 py-1.5 text-xs tracking-wide',
+  md: 'px-4 py-2 text-sm tracking-normal',
+  lg: 'px-6 py-3 text-base tracking-normal',
 };
 
 export interface ButtonStyleOptions {
@@ -29,10 +33,6 @@ export interface ButtonStyleOptions {
   className?: string;
 }
 
-/**
- * Shared class computation so links can look like buttons without nesting an
- * anchor inside a button (which would be invalid HTML).
- */
 export function buttonStyles({
   variant = 'primary',
   size = 'md',

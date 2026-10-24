@@ -1,18 +1,10 @@
 import { ApiRequestError } from '../services/http';
+import { AppStore } from '../services/store';
 import type { Property, PropertyFilters } from '../types/property';
 import type { RoommateFilters, RoommateMatch } from '../types/roommate';
-import { MOCK_PROPERTIES, filterMockProperties, findMockProperty } from './mockProperties';
-import { MOCK_ROOMMATE_MATCHES } from './mockRoommates';
+import { filterMockProperties } from './mockProperties';
 
-/**
- * MOCK API LAYER - Milestone 2 only.
- *
- * Deliberately async and deliberately shaped like the real thing: pages use the
- * same loading / ready / error flow they will use once `services/` calls
- * `GET /api/properties` (Milestone 7). Replacing this file is the whole point.
- */
-
-const MOCK_LATENCY_MS = 300;
+const MOCK_LATENCY_MS = 150;
 
 function afterLatency<T>(value: T): Promise<T> {
   return new Promise((resolve) => {
@@ -27,7 +19,7 @@ export interface PropertyListResult {
 
 /** Returns published listings matching the filters. */
 export function fetchProperties(filters: PropertyFilters): Promise<PropertyListResult> {
-  const published = MOCK_PROPERTIES.filter((property) => property.status === 'PUBLISHED');
+  const published = AppStore.getProperties().filter((property) => property.status === 'PUBLISHED');
   const items = filterMockProperties(published, filters);
 
   return afterLatency({ items, total: items.length });
@@ -35,9 +27,9 @@ export function fetchProperties(filters: PropertyFilters): Promise<PropertyListR
 
 /** Returns a single listing, rejecting with the API error shape when missing. */
 export function fetchPropertyById(id: string): Promise<Property> {
-  const property = findMockProperty(id);
+  const property = AppStore.getPropertyById(id);
 
-  if (!property || property.status !== 'PUBLISHED') {
+  if (!property || (property.status !== 'PUBLISHED' && property.status !== 'RENTED')) {
     return Promise.reject(
       new ApiRequestError(
         'That property does not exist or is no longer published.',
@@ -50,12 +42,15 @@ export function fetchPropertyById(id: string): Promise<Property> {
   return afterLatency(property);
 }
 
-/** Returns roommate matches filtered by city, budget and gender preference. */
+/** Returns roommate matches filtered by city, budget and gender preference using dynamic compatibility scoring. */
 export function fetchRoommateMatches(filters: RoommateFilters): Promise<RoommateMatch[]> {
   const query = filters.q.trim().toLowerCase();
   const maxBudget = filters.budgetMax ? Number(filters.budgetMax) : null;
 
-  const matches = MOCK_ROOMMATE_MATCHES.filter(({ profile }) => {
+  const matches = AppStore.calculateRoommateMatches({
+    city: filters.city || undefined,
+    budgetMax: maxBudget || 20000,
+  }).filter(({ profile }) => {
     if (query) {
       const haystack = `${profile.name} ${profile.city} ${profile.occupation} ${
         profile.institute ?? ''
@@ -65,7 +60,6 @@ export function fetchRoommateMatches(filters: RoommateFilters): Promise<Roommate
 
     if (filters.city && profile.city !== filters.city) return false;
 
-    // A match is relevant if the two budgets still overlap.
     if (maxBudget !== null && profile.budgetMin > maxBudget) return false;
 
     if (filters.genderPreference && profile.genderPreference !== filters.genderPreference) {
@@ -73,7 +67,8 @@ export function fetchRoommateMatches(filters: RoommateFilters): Promise<Roommate
     }
 
     return true;
-  }).sort((a, b) => b.score - a.score);
+  });
 
   return afterLatency(matches);
 }
+

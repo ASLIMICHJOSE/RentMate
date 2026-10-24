@@ -4,11 +4,11 @@ import { cn } from '../../utils/cn';
 export type BadgeTone = 'neutral' | 'brand' | 'success' | 'warning' | 'danger';
 
 const toneStyles: Record<BadgeTone, string> = {
-  neutral: 'bg-slate-100 text-slate-700',
-  brand: 'bg-brand-50 text-brand-700',
-  success: 'bg-emerald-50 text-emerald-700',
-  warning: 'bg-amber-50 text-amber-800',
-  danger: 'bg-red-50 text-red-700',
+  neutral: 'bg-[#f5f0e8] text-[#5e6676] border border-[#e8e2d8]',
+  brand: 'bg-[#fbf2ec] text-[#c8643c] border border-[#f3ddd0]',
+  success: 'bg-[#eff5f1] text-[#2a5745] border border-[#d2e4d9]',
+  warning: 'bg-[#fcf8ec] text-[#a17627] border border-[#f4e8c7]',
+  danger: 'bg-[#fdf2f2] text-rose-700 border border-rose-200',
 };
 
 export interface BadgeProps {
@@ -21,7 +21,7 @@ export function Badge({ children, tone = 'neutral', className }: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+        'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-wide uppercase',
         toneStyles[tone],
         className,
       )}
